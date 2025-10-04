@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { SearchBar } from './SearchBar';
 import { FilterSidebar } from './FilterSidebar';
 import { RepositoryCard } from './RepositoryCard';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import type { Repository } from '../lib/mock-data';
 import { searchRepositories, convertToRepository, type SearchFilters } from '../lib/github-api';
-import { Loader as Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 interface SearchResultsPageProps {
   repositories: Repository[];
@@ -48,14 +48,20 @@ export function SearchResultsPage({
           ? [...prev, repoId]
           : prev;
 
-      if (newComparing.length > 1) {
+      if (newComparing.length >= 2) {
         const selectedRepos = repositories.filter(r => newComparing.includes(r.id));
-        setTimeout(() => onCompare(selectedRepos), 100);
+        onCompare(selectedRepos);
       }
 
       return newComparing;
     });
   };
+
+  // Memoize filter values to prevent unnecessary re-renders
+  const filterKey = useMemo(() => 
+    JSON.stringify(filters),
+    [filters]
+  );
 
   useEffect(() => {
     const performSearch = async () => {
@@ -87,22 +93,24 @@ export function SearchResultsPage({
 
     const timeoutId = setTimeout(performSearch, 500);
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, filters, initialRepositories]);
+  }, [searchQuery, filterKey, initialRepositories, filters]);
 
-  const sortedRepos = [...repositories].sort((a, b) => {
-    switch (sortBy) {
-      case 'health':
-        return b.healthScore - a.healthScore;
-      case 'stars':
-        return b.stars - a.stars;
-      case 'activity':
-        return a.lastCommit.localeCompare(b.lastCommit);
-      case 'issues':
-        return b.goodFirstIssues - a.goodFirstIssues;
-      default:
-        return 0;
-    }
-  });
+  const sortedRepos = useMemo(() => {
+    return [...repositories].sort((a, b) => {
+      switch (sortBy) {
+        case 'health':
+          return b.healthScore - a.healthScore;
+        case 'stars':
+          return b.stars - a.stars;
+        case 'activity':
+          return new Date(b.lastCommit).getTime() - new Date(a.lastCommit).getTime();
+        case 'issues':
+          return b.goodFirstIssues - a.goodFirstIssues;
+        default:
+          return 0;
+      }
+    });
+  }, [repositories, sortBy]);
 
   return (
     <div className="flex h-screen">
